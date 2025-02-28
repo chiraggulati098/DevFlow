@@ -1,13 +1,10 @@
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QTextEdit, QLabel, QLineEdit
 import sys
-import os
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from backend.ai_model import generate_response
 
 class UI(QWidget):
-    def __init__(self):
+    def __init__(self, store):
         super().__init__()
+        self.store = store
         self.init_ui()
     
     def init_ui(self):
@@ -25,9 +22,9 @@ class UI(QWidget):
         layout.addWidget(self.input_field)
 
         # submit button
-        self.submit_buttom = QPushButton("Generate", self)
-        self.submit_buttom.clicked.connect(self.handle_submit)
-        layout.addWidget(self.submit_buttom)
+        self.submit_button = QPushButton("Generate", self)
+        self.submit_button.clicked.connect(self.handle_submit)
+        layout.addWidget(self.submit_button)
 
         # output display area
         self.output_area = QTextEdit(self)
@@ -41,16 +38,18 @@ class UI(QWidget):
         if user_query:
             self.output_area.append(f"User: {user_query}")
 
-            ai_response = generate_response(user_query)
-            self.output_area.append(f"DevFlow Bot: {ai_response}")
+            results = self.store.query(user_query)
+        
+        if results:
+            response = "\n".join(chunk for chunk in results)
+        else:
+            response = "No relevant documents found."
 
-            self.input_field.clear()
+        self.output_area.append(f"DevFlow Bot: {response}")
+        self.input_field.clear()
 
-def run_app():
+def run_app(store):
     app = QApplication([])
-    window = UI()
+    window = UI(store)
     window.show()
     sys.exit(app.exec_())
-
-if __name__ == "__main__":
-    run_app()

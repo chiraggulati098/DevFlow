@@ -3,3 +3,4 @@
 .DS_Store
 /backend/__pycache__
 /chroma_db
+/frontend/__pycache__

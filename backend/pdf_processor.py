@@ -19,7 +19,7 @@ def split_text(text):
     '''
     Splits text into chunks:
     1. stores code in same chunk (no matter the length)
-    2. stores text till 1000 chars in 1 chunk (then starts new chunk)
+    2. stores text till 1000 chars in 1 chunk, splitting at full stop when exceeded
     '''
     chunks = []
     current_chunk = ""
@@ -33,8 +33,13 @@ def split_text(text):
             current_chunk += line + '\n'
         else:
             if len(current_chunk) + len(line) > 1000:
-                chunks.append(current_chunk.strip())
-                current_chunk = line + '\n'
+                last_period = current_chunk.rfind('.')
+                if last_period != -1:
+                    chunks.append(current_chunk[:last_period + 1].strip())
+                    current_chunk = current_chunk[last_period + 1:] + line + '\n'
+                else:
+                    chunks.append(current_chunk.strip())
+                    current_chunk = line + '\n'
             else:
                 current_chunk += line + '\n'
     
