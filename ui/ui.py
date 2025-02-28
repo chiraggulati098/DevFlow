@@ -42,7 +42,10 @@ class UI(QWidget):
             self.output_area.append(f"User: {user_query}")
 
             ai_response = generate_response(user_query)
-            self.output_area.append(f"DevFlow Bot: {ai_response}")
+            if ai_response.startswith("(Retrieved from history)"):
+                self.output_area.append(f"DevFlow Bot 🔍: {ai_response}")  # Highlight retrieved response
+            else:
+                self.output_area.append(f"DevFlow Bot 💡: {ai_response}")  # Highlight new AI response
 
             self.input_field.clear()
 
