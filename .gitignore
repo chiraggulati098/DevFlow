@@ -2,4 +2,4 @@
 .env
 .DS_Store
 /backend/__pycache__
-/chromadb_store
+/chroma_db

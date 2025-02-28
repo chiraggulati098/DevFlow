@@ -1,24 +1,51 @@
 import os
 import pdfplumber
+from typing import List
 
-DOCS_DIR = "../docs/"
-
-def extract_text_from_pdf(pdf_path):
+def load_pdf(file_path):
     '''
-    Extracts and cleans text from a given pdf file
+    Reads text from PDF document
     '''
     text = ""
-    with pdfplumber.open(pdf_path) as pdf:
-        for page in pdf.pages:
-            text += page.extract_text() + "\n\n"
+    try:
+        with pdfplumber.open(file_path) as pdf:
+            for page in pdf.pages:
+                text += page.extract_text() or ""
+    except Exception as e:
+        print(f"Error loading pdf {file_path}: {e}")
+    return text
+
+def split_text(text):
+    '''
+    Splits text into chunks:
+    1. stores code in same chunk (no matter the length)
+    2. stores text till 1000 chars in 1 chunk (then starts new chunk)
+    '''
+    chunks = []
+    current_chunk = ""
+    in_code_block = False
+
+    for line in text.split('\n'):
+        if line.strip().startswith('```'):
+            in_code_block = not in_code_block
+            current_chunk += line + '\n'
+        elif in_code_block:
+            current_chunk += line + '\n'
+        else:
+            if len(current_chunk) + len(line) > 1000:
+                chunks.append(current_chunk.strip())
+                current_chunk = line + '\n'
+            else:
+                current_chunk += line + '\n'
     
-    return text.strip()
+    if current_chunk:
+        chunks.append(current_chunk.strip())
+    
+    return chunks
 
-def process_and_store_pdf(pdf_path):
+def process_pdf(file_path):
     '''
-    Extracts text fromm PDF, splits it into paras, and saves processed text
+    Extracts text from a PDF and splits it into chunks.
     '''
-    text = extract_text_from_pdf(pdf_path)
-    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
-
-    return paragraphs
+    text = load_pdf(file_path)
+    return split_text(text)

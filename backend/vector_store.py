@@ -1,41 +1,82 @@
 import chromadb
-from sentence_transformers import SentenceTransformer
+import google.generativeai as genai
+import hashlib
+import json
 import os
+from dotenv import load_dotenv
+from sentence_transformers import CrossEncoder
 
-chroma_client = chromadb.PersistentClient(path="./chromadb_store")
-collection = chroma_client.get_or_create_collection(name="docs")
-embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+from backend.pdf_processor import process_pdf
 
-def add_pdf_to_chromadb(pdf_path):
+load_dotenv()
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+genai.configure(api_key=GEMINI_API_KEY)
+persist_directory = os.path.join(os.getcwd(), "chroma_db")  # Store in a local directory
+
+cross_encoder_model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+
+def generate_embeddings(text):
     '''
-    Extracts text from PDF, generates embeddings, and stores it in chromaDB with metadata
+    Generate embedding using Gemini
     '''
-    from backend.pdf_processor import process_and_store_pdf
-
-    paragraphs = process_and_store_pdf(pdf_path)
-    embeddings = embedding_model.encode(paragraphs).tolist()
-    doc_name = os.path.basename(pdf_path)
-
-    for i, paragraph in enumerate(paragraphs):
-        collection.add(
-            ids = [f"{doc_name}_{i}"],
-            documents = [paragraph],
-            embeddings = [embeddings[i]],
-            metadatas = [{"source": doc_name}]
-        )
+    if not text.strip():
+        print('Skipping empty chunk.')
+        return None
     
-    print(f"{doc_name} added to ChromaDB")
+    response = genai.embed_content(model="models/text-embedding-004", content=text)
+    return response['embedding']
 
-def query_chromadb(query, top_k = 3):
-    '''
-    Retrieves most relevant paragraphs for a given query
-    '''
-    query_embedding = embedding_model.encode([query]).tolist()
-    results = collection.query(
-        query_texts=[query], n_results=top_k, include=["documents", "metadatas", "distances"]
-    )
+class VectorStore:
+    def __init__(self):
+        self.client = chromadb.PersistentClient(path = persist_directory)
+        self.collection = self.client.get_or_create_collection("devflow_docs")
 
-    documents = results["documents"][0] 
-    metadatas = results["metadatas"][0]
+    def add_document(self, pdf_path):
+        '''
+        Extract text fromm PDF, generate embeddings, and store in ChromaDB
+        '''
+        text_chunks = process_pdf(pdf_path)
+        metadata = {"source": pdf_path}
 
-    return list(zip(documents, metadatas))
+        for idx, chunk in enumerate(text_chunks):
+            chunk = chunk.strip()
+
+            if not chunk:
+                print(f"Skipping empty chunk {idx} from {pdf_path}")
+                continue
+
+            chunk_id = hashlib.md5((pdf_path + str(idx)).encode()).hexdigest()  # Unique ID per chunk
+            embedding = generate_embeddings(chunk)
+
+            print(f"Adding chunk {idx} out of {len(text_chunks)} from {pdf_path} with ID {chunk_id}")
+
+            existing = self.collection.get(ids=[chunk_id])
+            if existing and existing['ids']:
+                print(f"Skipping existing chunk {idx} from {pdf_path}")
+                continue 
+
+            self.collection.add(
+                ids=[chunk_id],
+                embeddings=[embedding],
+                documents=[chunk],
+                metadatas=[metadata]
+            )
+    
+    def query(self, query_text, top_k = 10):
+        '''
+        Retrieve the most relevant chunks from ChromaDB based on query
+        '''
+        query_embedding = generate_embeddings(query_text)
+        results = self.collection.query(query_embeddings=[query_embedding], n_results=top_k)
+
+        if not results or "documents" not in results or not results["documents"][0]:
+            return []
+
+        retrieved_chunks = results["documents"][0]
+
+        # rerank using CrossEncoder
+        rerank_scores = cross_encoder_model.predict([[query_text, chunk] for chunk in retrieved_chunks])
+        reranked_results = sorted(zip(retrieved_chunks, rerank_scores), key=lambda x: x[1], reverse=True)
+        
+        return [chunk for chunk, _ in reranked_results]
