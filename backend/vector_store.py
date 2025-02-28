@@ -1,8 +1,8 @@
 import chromadb
 import google.generativeai as genai
 import hashlib
-import json
 import os
+import time
 from dotenv import load_dotenv
 from sentence_transformers import CrossEncoder
 
@@ -25,12 +25,19 @@ def generate_embeddings(text):
         print('Skipping empty chunk.')
         return None
     
-    try:
-        response = genai.embed_content(model="models/text-embedding-004", content=text)
-        return response['embedding']
-    except Exception as e:
-        print(f"Error generating embedding: {e}")
-    return None
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = genai.embed_content(model="models/text-embedding-004", content=text)
+            return response['embedding']
+        except Exception as e:
+            if attempt < max_retries - 1:
+                print(f"Attempt {attempt + 1} failed: {e}. Retrying...")
+                time.sleep(1)  # Brief delay between retries
+                continue
+            else:
+                print(f"Error generating embedding after {max_retries} attempts: {e}")
+                return None
 
 def get_file_hash(file_path):
     '''
