@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from sentence_transformers import CrossEncoder
 
 from backend.pdf_processor import process_pdf
+from backend.ai_model import summarize_query
 
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -82,7 +83,11 @@ class VectorStore:
         '''
         Retrieve the most relevant chunks from ChromaDB based on query
         '''
-        query_embedding = generate_embeddings(query_text)
+        summarized_query = summarize_query(query_text)
+        print(f"Original query: {query_text}")
+        print(f"Summarized query: {summarized_query}")
+
+        query_embedding = generate_embeddings(summarized_query)
         if query_embedding is None:
             return []
         results = self.collection.query(query_embeddings=[query_embedding], n_results=top_k)
@@ -102,7 +107,7 @@ class VectorStore:
         '''
         all_entries = self.collection.get(include=["metadatas"])
         ids_to_remove = [entry[0] for entry in zip(all_entries["ids"], all_entries["metadatas"]) if entry[1] and entry[1].get("source") == pdf_path]
-        
+
         if ids_to_remove:
             self.collection.delete(ids=ids_to_remove)
             print(f"Removed {len(ids_to_remove)} chunks for {pdf_path}")

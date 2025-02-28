@@ -13,8 +13,21 @@ def generate_response(prompt):
     Send user query to Gemini API and return response
     '''
     try:
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel("gemini-1.5-flash")
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
         return f"Error: {str(e)}"
+
+def summarize_query(query):
+    '''
+    Summarize query using Gemini for RAG search
+    '''
+    try:
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        prompt = f"Summarize the following query for a retrieval search: {query}"
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        print(f"Error summarizing query: {e}")
+        return query
