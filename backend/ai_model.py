@@ -2,8 +2,6 @@ import google.generativeai as genai
 import os
 from dotenv import load_dotenv
 
-from backend.db import store_query, retrieve_similar
-
 # load API keys from .env
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
