@@ -23,6 +23,9 @@ class UI(QWidget):
         self.input_field = QLineEdit(self)
         layout.addWidget(self.input_field)
 
+        # connect enter key to generate output
+        self.input_field.returnPressed.connect(self.handle_submit)
+
         # submit button
         self.submit_button = QPushButton("Generate", self)
         self.submit_button.clicked.connect(self.handle_submit)
