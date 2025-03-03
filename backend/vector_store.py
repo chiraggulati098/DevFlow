@@ -72,7 +72,7 @@ class VectorStore:
                 print(f"Failed to generate embedding for chunk {idx} from {pdf_path}")
                 continue
 
-            print(f"Adding chunk {idx} out of {len(text_chunks)} from {pdf_path} with ID {chunk_id}")
+            print(f"Adding chunk {idx + 1} out of {len(text_chunks)} from {pdf_path} with ID {chunk_id}")
 
             existing = self.collection.get(ids=[chunk_id])
             if existing and existing['ids']:
@@ -126,6 +126,7 @@ class VectorStore:
         if not os.path.exists(docs_dir):
             os.makedirs(docs_dir)
             print(f"Created {docs_dir} directory.")
+            # TO DO: Add logic for removing all vector embeddings if no folder was found for docs
             return
 
         # get all PDFs in docs directory
