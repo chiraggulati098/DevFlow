@@ -1,8 +1,41 @@
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLineEdit, QListWidget, QListWidgetItem, QLabel, QHBoxLayout
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 import sys
 
 from backend.ai_model import generate_response
+
+class Worker(QThread):
+    finished = pyqtSignal(str)
+
+    def __init__(self, store, query, parent = None):
+        super().__init__(parent)
+        self.store = store
+        self.query = query
+    
+    def make_rag_prompt(self, query, relevant_chunks):
+        '''
+        Construct a prompt for Gemini to generate a structured output
+        '''
+        escaped_chunks = " ".join(relevant_chunks).replace("'", "").replace('"', '').replace("\n", " ")
+        prompt = f"""You are a helpful and informative bot that answers questions using text from the reference chunks below. Provide a clear and concise response, such as a step-by-step guide or explanation, based on the query. If the chunks are irrelevant, provide a general answer based on your knowledge.
+        QUESTION: '{query}'
+        REFERENCE CHUNKS: '{escaped_chunks}'
+        ANSWER:
+        """
+
+        return prompt
+
+    def run(self):
+        '''
+        Does the RAG search processing in background
+        '''
+        results = self.store.query(self.query)
+        if results:
+            prompt = self.make_rag_prompt(self.query, results)
+            response = generate_response(prompt)
+        else:
+            response = "No relevant documents found. Please try a different query."
+        self.finished.emit(response)
 
 class UI(QWidget):
     def __init__(self, store):
@@ -109,7 +142,7 @@ class UI(QWidget):
             padding: 15px;
             max-width: 700px;
         """)
-        
+
         widget.adjustSize()
         size = widget.sizeHint()
         size.setHeight(size.height() + 5)  
@@ -127,35 +160,27 @@ class UI(QWidget):
         self.chat_list.setItemWidget(item, widget)
         self.chat_list.scrollToBottom()
 
-    def make_rag_prompt(self, query, relevant_chunks):
-        '''
-        Construct a prompt for Gemini to generate a structured output
-        '''
-        escaped_chunks = " ".join(relevant_chunks).replace("'", "").replace('"', '').replace("\n", " ")
-        prompt = f"""You are a helpful and informative bot that answers questions using text from the reference chunks below. Provide a clear and concise response, such as a step-by-step guide or explanation, based on the query. If the chunks are irrelevant, provide a general answer based on your knowledge.
-        QUESTION: '{query}'
-        REFERENCE CHUNKS: '{escaped_chunks}'
-        ANSWER:
-        """
-
-        return prompt
-
     def handle_submit(self):
         user_query = self.input_field.text()
         if not user_query:
             return
         
         self.add_message('User', user_query)
-        results = self.store.query(user_query)
-        
-        if results:
-            prompt = self.make_rag_prompt(user_query, results)
-            response = generate_response(prompt)
-        else:
-            response = "No relevant documents found. Please try a different query."
-
-        self.add_message('DevFlow Bot', response)
         self.input_field.clear()
+
+        # Force UI update to show the message instantly
+        QApplication.processEvents()
+
+        # Start RAG processing in thread
+        self.worker = Worker(self.store, user_query)
+        self.worker.finished.connect(self.on_response_ready)
+        self.worker.start()
+    
+    def on_response_ready(self, response):
+        '''
+        Handle bot response when worker finishes
+        '''
+        self.add_message('DevFlow Bot', response)
 
 def run_app(store):
     app = QApplication([])
